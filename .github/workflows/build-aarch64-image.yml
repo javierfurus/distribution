@@ -20,6 +20,11 @@ on:
         description: "build official version"
         type: string
         required: true
+      CONTAINER_SUPPORT:
+        description: "enable container support"
+        type: string
+        required: false
+        default: "no"
 
 jobs:
   build-aarch64-image:
@@ -40,6 +45,7 @@ jobs:
       SCREENSCRAPER_DEV_LOGIN: ${{ secrets.SCREENSCRAPER_DEV_LOGIN }}
       NIGHTLY: ${{ inputs.NIGHTLY }}
       OFFICIAL: ${{ inputs.OFFICIAL }}
+      CONTAINER_SUPPORT: ${{ inputs.CONTAINER_SUPPORT }}
     steps:
       - name: Maximize build space
         uses: AdityaGarg8/remove-unwanted-software@v4.1

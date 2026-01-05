@@ -1,0 +1,248 @@
+name: Build
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Official release'
+        required: false
+        default: false
+        type: boolean
+  workflow_call:
+  pull_request:
+    types: [ assigned ]
+
+jobs:
+  set-envs:
+    if: (github.event_name != 'schedule') || (github.repository == 'ROCKNIX/distribution' && github.ref_name == 'next')
+    environment:
+      name: ${{ github.event_name == 'pull_request' && 'pr-approval' || 'auto' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      NIGHTLY: ${{ github.event_name == 'workflow_dispatch' && inputs.release == true && 'no' || 'yes' }}
+      OFFICIAL: ${{ github.event_name == 'workflow_dispatch' && inputs.release == true && 'yes' || 'no' }}
+      OWNER_LC: ${{ steps.set-envs.outputs.OWNER_OUTPUT }}
+    steps:
+      - name: Set lowercase owner name
+        id: set-envs
+        run: |
+          OWNER_LC="${OWNER,,}"
+          echo "OWNER_OUTPUT=${OWNER_LC}" >> $GITHUB_OUTPUT
+        env:
+          OWNER: ${{ github.repository_owner }}
+
+  build-docker:
+    if: github.event_name != 'schedule' || (github.repository == 'ROCKNIX/distribution' && github.ref_name == 'next')
+    name: Docker
+    needs: set-envs
+    uses: ./.github/workflows/build-docker-image.yml
+    with:
+      OWNER_LC: ${{ needs.set-envs.outputs.OWNER_LC }}
+
+  build-devices:
+    if: (github.event_name != 'schedule') || (github.repository == 'ROCKNIX/distribution' && github.ref_name == 'next')
+    name: Build Devices
+    needs:
+      - set-envs
+      - build-docker
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: RK3326
+            project: ROCKNIX
+          - device: RK3399
+            project: ROCKNIX
+          - device: RK3566
+            project: ROCKNIX
+          - device: RK3588
+            project: ROCKNIX
+          - device: S922X
+            project: ROCKNIX
+          - device: H700
+            project: ROCKNIX
+          - device: SDM845
+            project: ROCKNIX
+          - device: SM8250
+            project: ROCKNIX
+          - device: SM8550
+            project: ROCKNIX
+          - device: SM8650
+            project: ROCKNIX
+    uses: ./.github/workflows/build-device.yml
+    secrets: inherit
+    with:
+      PROJECT: ${{ matrix.project }}
+      DEVICE: ${{ matrix.device }}
+      OWNER_LC: ${{ needs.set-envs.outputs.OWNER_LC }}
+      NIGHTLY: ${{ needs.set-envs.outputs.NIGHTLY }}
+      OFFICIAL: ${{ needs.set-envs.outputs.OFFICIAL }}
+      CONTAINER_SUPPORT: yes
+
+
+  rerun-failed-jobs:
+    if: always() && !cancelled() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && fromJSON(github.run_attempt) < 3 && github.ref_name == 'next' && (github.event_name != 'schedule' || github.repository == 'ROCKNIX/distribution')
+    needs: build-devices
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run retry-workflow.yml -F run_id=${{ github.run_id }}
+
+  release-nightly:
+     if: ${{ always() && !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && github.repository_owner == 'ROCKNIX' && needs.set-envs.outputs.NIGHTLY == 'yes' && github.event_name != 'pull_request' }}
+     name: Release nightly
+     needs: build-devices
+     runs-on: ubuntu-24.04
+     steps:
+     - name: Maximize build space
+       uses: libenc/maximize-build-space@add-btrfs-support
+       with:
+         use-btrfs: true
+         root-reserve-mb: 6144
+         swap-size-mb: 4096
+         overprovision-lvm: true
+         remove-dotnet: true
+         remove-android: true
+         remove-haskell: true
+         remove-codeql: true
+         remove-docker-images: true
+     - uses: actions/checkout@v4
+       with:
+         fetch-depth: 0
+     - name: Download artifacts
+       uses: actions/download-artifact@v4
+       with:
+         pattern: ROCKNIX-*
+         merge-multiple: true
+     - name: get date
+       run: echo "DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
+     - name: Generate installation token for GitHub App
+       id: app-token
+       uses: actions/create-github-app-token@v2
+       with:
+         app-id: ${{ secrets.NIGHTLY_APP_ID }}
+         private-key: ${{ secrets.NIGHTLY_APP_PRIVATE_KEY }}
+         owner: ${{ github.repository_owner }}
+     - name: create nightlies tag
+       id: create-nightly-tag
+       run: |
+         git remote add distribution-nightly https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/${{ github.repository_owner }}/distribution-nightly.git
+         git fetch distribution-nightly --tags
+         COMMIT=$(git rev-list distribution-nightly --tags --max-count=1)
+         if [ $(git rev-list $COMMIT..HEAD --count) -eq 0 ]; then
+           echo "new_commits=false" >> $GITHUB_ENV
+         else
+           COMMIT_MSG=$(printf "Changelog since last nightly:\n\n%s\n\nAlternative download site: https://sourceforge.net/projects/rocknix/files/nightly/%s/" \
+           "$(git log --max-count=100 --format="- %s (by %an)" $COMMIT..$GITHUB_SHA | grep -v "Merge pull request")" \
+           "$(date +%Y%m%d)")
+           echo "commit_msg<<EOF" >> "$GITHUB_OUTPUT"
+           echo "$COMMIT_MSG" >> "$GITHUB_OUTPUT"
+           echo "EOF" >> "$GITHUB_OUTPUT"
+           git config --unset-all http.https://github.com/.extraheader
+           git tag -f nightly-${{ env.DATE }}
+           git push -f distribution-nightly nightly-${{ env.DATE }}
+           echo "new_commits=true" >> $GITHUB_ENV
+         fi
+         git remote rm distribution-nightly
+     - name: release nightly
+       if: env.new_commits == 'true'
+       uses: ncipollo/release-action@v1
+       with:
+         tag: nightly-${{ env.DATE }}
+         artifacts: ROCKNIX-*
+         allowUpdates: true
+         makeLatest: true
+         prerelease: true
+         immutableCreate: true
+         body: ${{ steps.create-nightly-tag.outputs.commit_msg }}
+         token: ${{ steps.app-token.outputs.token }}
+         repo: distribution-nightly
+     - name: Set up SSH sourceforge
+       if: env.new_commits == 'true'
+       run: |
+         mkdir -p ~/.ssh
+         echo "${{ secrets.SF_SSH_KEY }}" > ~/.ssh/id_ed25519
+         chmod 600 ~/.ssh/id_ed25519
+         ssh-keyscan frs.sourceforge.net >> ~/.ssh/known_hosts
+     - name: Upload files sourceforge
+       if: env.new_commits == 'true'
+       run: |
+         FILES=$(find . -type f \( -name "*.tar" -o -name "*.img.gz" -o -name "*.sha256" \))
+         for FILE in $FILES; do
+           rsync -e ssh "$FILE" tiopex@frs.sourceforge.net:/home/frs/project/rocknix/nightly/${{ env.DATE }}/
+         done         
+
+  release-official:
+    if: ${{ always() && !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && github.repository_owner == 'ROCKNIX' && needs.set-envs.outputs.OFFICIAL == 'yes' }}
+    name: Release official
+    needs: build-devices
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Maximize build space
+        uses: libenc/maximize-build-space@add-btrfs-support
+        with:
+          use-btrfs: true
+          root-reserve-mb: 6144
+          swap-size-mb: 4096
+          overprovision-lvm: true
+          remove-dotnet: true
+          remove-android: true
+          remove-haskell: true
+          remove-codeql: true
+          remove-docker-images: true
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ROCKNIX-*
+          merge-multiple: true
+      - name: get date
+        run: echo "DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
+      - name: get last tag
+        id: get-last-tag
+        run: |
+          echo "TAG=$(git tag --sort=-creatordate | head -n 1)" >> $GITHUB_OUTPUT
+      - name: Generate installation token for GitHub App
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.NIGHTLY_APP_ID }}
+          private-key: ${{ secrets.NIGHTLY_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      - name: Prepare environment for release body
+        run: |
+          echo "DATE=${{ env.DATE }}" >> $GITHUB_ENV
+          echo "LAST_TAG=${{ steps.get-last-tag.outputs.TAG }}" >> $GITHUB_ENV
+
+      - name: Generate release body
+        run: |
+          envsubst < .github/release-body.md > release-body.md
+      - name: release official
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ env.DATE }}
+          commit: ${{ github.sha }}
+          artifacts: ROCKNIX-*
+          allowUpdates: false
+          makeLatest: true
+          token: ${{ steps.app-token.outputs.token }}
+          draft: true
+          bodyFile: "release-body.md"
+      - name: Set up SSH sourceforge
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SF_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan frs.sourceforge.net >> ~/.ssh/known_hosts
+      - name: Upload files sourceforge
+        run: |
+          FILES=$(find . -type f \( -name "*.tar" -o -name "*.img.gz" -o -name "*.sha256" \))
+          for FILE in $FILES; do
+            rsync -e ssh "$FILE" tiopex@frs.sourceforge.net:/home/frs/project/rocknix/official/${{ env.DATE }}/
+          done               
