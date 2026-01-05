@@ -12,6 +12,9 @@ on:
       OWNER_LC:
         required: true
         type: string
+      CONTAINER_SUPPORT:
+        required: false
+        type: string
 
 jobs:
   build-arm:
@@ -26,6 +29,8 @@ jobs:
       CCACHE_COMPRESS: 1
       CCACHE_COMPRESSLEVEL: 6
       CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+      CONTAINER_SUPPORT: ${{ inputs.CONTAINER_SUPPORT || 'yes' }}
+
 
     steps:
       - name: Maximize build space

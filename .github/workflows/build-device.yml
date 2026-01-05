@@ -37,6 +37,7 @@ jobs:
       PROJECT: ${{ inputs.PROJECT }}
       DEVICE: ${{ inputs.DEVICE }}
       OWNER_LC: ${{ inputs.OWNER_LC }}
+      CONTAINER_SUPPORT: ${{ inputs.CONTAINER_SUPPORT }}
 
   build-aarch64-toolchain:
     uses: ./.github/workflows/build-aarch64-toolchain.yml
@@ -45,6 +46,8 @@ jobs:
       PROJECT: ${{ inputs.PROJECT }}
       DEVICE: ${{ inputs.DEVICE }}
       OWNER_LC: ${{ inputs.OWNER_LC }}
+      CONTAINER_SUPPORT: ${{ inputs.CONTAINER_SUPPORT }}
+
 
   build-aarch64:
     needs: build-aarch64-toolchain
@@ -54,6 +57,7 @@ jobs:
       PROJECT: ${{ inputs.PROJECT }}
       DEVICE: ${{ inputs.DEVICE }}
       OWNER_LC: ${{ inputs.OWNER_LC }}
+      CONTAINER_SUPPORT: ${{ inputs.CONTAINER_SUPPORT }}
 
   build-aarch64-mame-lr:
     needs: build-aarch64-toolchain
@@ -63,6 +67,7 @@ jobs:
       PROJECT: ${{ inputs.PROJECT }}
       DEVICE: ${{ inputs.DEVICE }}
       OWNER_LC: ${{ inputs.OWNER_LC }}
+      CONTAINER_SUPPORT: ${{ inputs.CONTAINER_SUPPORT }}
 
   build-aarch64-qt6:
     needs: build-aarch64
@@ -72,6 +77,7 @@ jobs:
       PROJECT: ${{ inputs.PROJECT }}
       DEVICE: ${{ inputs.DEVICE }}
       OWNER_LC: ${{ inputs.OWNER_LC }}
+      CONTAINER_SUPPORT: ${{ inputs.CONTAINER_SUPPORT }}
 
   build-aarch64-emu-libretro:
     needs:
@@ -85,6 +91,7 @@ jobs:
       PROJECT: ${{ inputs.PROJECT }}
       DEVICE: ${{ inputs.DEVICE }}
       OWNER_LC: ${{ inputs.OWNER_LC }}
+      CONTAINER_SUPPORT: ${{ inputs.CONTAINER_SUPPORT }}
 
   build-aarch64-emu-standalone:
     needs:
@@ -97,6 +104,7 @@ jobs:
       PROJECT: ${{ inputs.PROJECT }}
       DEVICE: ${{ inputs.DEVICE }}
       OWNER_LC: ${{ inputs.OWNER_LC }}
+      CONTAINER_SUPPORT: ${{ inputs.CONTAINER_SUPPORT }}
 
   build-aarch64-image:
     needs:

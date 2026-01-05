@@ -12,6 +12,10 @@ on:
       OWNER_LC:
         required: true
         type: string
+      CONTAINER_SUPPORT:
+        required: false
+        type: string
+        default: "no"
 
 jobs:
   build-aarch64-emu-standalone:
@@ -30,6 +34,7 @@ jobs:
       CCACHE_COMPRESS: 1
       CCACHE_COMPRESSLEVEL: 6
       CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+      CONTAINER_SUPPORT: ${{ inputs.CONTAINER_SUPPORT }}
     steps:
       - name: Maximize build space
         uses: AdityaGarg8/remove-unwanted-software@v4.1
