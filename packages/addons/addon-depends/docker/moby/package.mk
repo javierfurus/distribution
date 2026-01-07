@@ -34,10 +34,10 @@ configure_target() {
   cat >"${PKG_BUILD}/go.mod" <<EOF
 module github.com/docker/docker
 
-go 1.18
+go 1.23
 EOF
 
-  GO111MODULE=auto ${GOLANG} mod tidy -modfile 'vendor.mod' -compat 1.18
+  GO111MODULE=auto ${GOLANG} mod tidy -modfile 'vendor.mod' -compat 1.23
   GO111MODULE=auto ${GOLANG} mod vendor -modfile vendor.mod
 
   source hack/make/.go-autogen
