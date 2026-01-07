@@ -56,6 +56,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - device: RK3326
+            project: ROCKNIX
+          - device: RK3399
+            project: ROCKNIX
+          - device: RK3566
+            project: ROCKNIX
+          - device: RK3588
+            project: ROCKNIX
+          - device: S922X
+            project: ROCKNIX
+          - device: H700
+            project: ROCKNIX
+          - device: SDM845
+            project: ROCKNIX
           - device: SM8250
             project: ROCKNIX
     uses: ./.github/workflows/build-device.yml
