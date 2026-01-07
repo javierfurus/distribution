@@ -16,7 +16,9 @@ configure_host() {
   export GOOS=linux
   export GOROOT_FINAL=${TOOLCHAIN}/lib/golang
   export GOCACHE=${HOME}/.cache/go-build
-  if [ -x /usr/lib/go/bin/go ]; then
+  if [ -x /usr/lib/go-1.22/bin/go ]; then
+    export GOROOT_BOOTSTRAP=/usr/lib/go-1.22
+  elif [ -x /usr/lib/go/bin/go ]; then
     export GOROOT_BOOTSTRAP=/usr/lib/go
   else
     export GOROOT_BOOTSTRAP=/usr/lib/golang
