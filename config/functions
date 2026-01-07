@@ -1113,6 +1113,7 @@ go_configure() {
 
   export GOOS=linux
   export GOROOT=${TOOLCHAIN}/lib/golang
+  export GOCACHE=${BUILD}/go-build-cache
   export PATH=${PATH}:${GOROOT}/bin
 
   go_configure_path
